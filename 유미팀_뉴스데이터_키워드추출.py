@@ -33,7 +33,7 @@ print(json_files)
 
 """## 전처리 방법 고민
 - json 파일 불러와서 전처리 작업 진행
-- ['data/final_news_2023.json', 'data/final_news_2025.json', 'data/final_news_2024.json', 'data/final_news_2026.json']
+- ['data/raw_news_2023.json', 'data/raw_news_2024.json', 'data/raw_news_2025.json', 'data/raw_news_2026.json']
 
 #### 파일 불러오기
 - 내림차순 기준 20개 선택
@@ -43,9 +43,9 @@ import json
 import os
 import pandas as pd
 
-# 전처리에 사용 할 data/final_news_2023.json 데이터 불러오기
+# 전처리에 사용 할 데이터 불러오기
 # 불러올 JSON 파일 1개만 지정
-file_path = "data/raw_news_2023_part1.json"
+file_path = "data/raw_news_2025.json"
 
 # JSON 파일 불러오기
 with open(file_path, "r", encoding="utf-8") as f:
@@ -98,7 +98,7 @@ df["category"].unique()
 
 
 """#### 파일 불러오기
-- 카테고리 컬럼 선택해서 특정 값 지정해 랜덤으로 20개
+- 카테고리 컬럼 선택해서 특정 값 지정해 랜덤으로 뽑기
 """
 
 import json
@@ -107,7 +107,7 @@ import pandas as pd
 
 # 전처리에 사용 할 데이터 불러오기
 # 불러올 JSON 파일 1개만 지정
-file_path = "data/raw_news_2023_part2.json"
+file_path = "data/raw_news_2025.json"
 
 # JSON 파일 불러오기
 with open(file_path, "r", encoding="utf-8") as f:
@@ -143,21 +143,37 @@ print("데이터 크기:", df.shape)
 print("\n컬럼별 결측치 개수:")
 print(df.isnull().sum())
 
-print("==============================  '창업트렌드' 카테고리 랜덤 20개 샘플 데이터 복사본 생성 ==========================")
+print("==============================  지정 카테고리별 랜덤 100개씩 총 400개 샘플 데이터 복사본 생성 ==========================")
 
-# category 컬럼 값이 '1인창업'인 데이터만 필터링
-df_one_person = df[df["category"] == "창업트렌드"].copy()
+# 선택할 category 값 목록
+target_categories = ["소자본창업", "창업트렌드", "무인매장", "배달창업"]
 
-# '1인창업' 데이터 중 랜덤으로 100개 선택하여 복사본 생성
-df_20 = df_one_person.sample(n=100, random_state=42).copy()
+# 지정한 category 값에 해당하는 데이터만 필터링
+df_target = df[df["category"].isin(target_categories)].copy()
+
+# 각 category 값마다 랜덤으로 100개씩 선택
+df_400 = (
+    df_target
+    .groupby("category", group_keys=False)
+    .apply(lambda x: x.sample(n=100, random_state=42))
+    .copy()
+)
+
+# 기존 인덱스를 컬럼으로 유지
+df_400 = df_400.reset_index(drop=False)
 
 # 결과 확인
 print("원본 데이터 크기:", df.shape)
-print("'창업트렌드' 데이터 크기:", df_one_person.shape)
-print("랜덤 20개 샘플 데이터 크기:", df_20.shape)
+print("선택한 카테고리 데이터 크기:", df_target.shape)
+print("카테고리별 선택 데이터 개수:")
+print(df_400["category"].value_counts())
 
-# 20개 샘플 데이터 일부 확인
-df_20.head()
+print("최종 샘플 데이터 크기:", df_400.shape)
+
+# 샘플 데이터 일부 확인
+df_400.head()
+
+df_400.columns
 
 
 
@@ -189,6 +205,14 @@ def clean_content(text):
     # 예: http://example.com, https://news.com/article
     text = re.sub(
         r"http[s]?://\S+|www\.\S+",
+        " ",
+        text
+    )
+
+    # /텍스트 형태 제거
+    # 예: /텍스트, /뉴스, /기사본문 등
+    text = re.sub(
+        r"/[가-힣A-Za-z0-9_]+",
         " ",
         text
     )
@@ -249,6 +273,13 @@ def clean_content(text):
     # 예: 기자=, 기자 =
     text = re.sub(r"기자\s*=", " ", text)
 
+    # | ... 기자 | 형태 제거
+    # 예: | 스마트에프엔 = 정민석 기자 |
+    text = re.sub(
+    r"\|[^|]*기자[^|]*\|",
+    " ",
+    text)
+
     # 저작권, 무단전재, 재배포 금지, 제보 문구 제거
     # 예: 무단 전재, 재배포 금지, Copyright, ⓒ, 제보를 기다립니다
     text = re.sub(
@@ -260,7 +291,7 @@ def clean_content(text):
 
     # 불필요한 특수기호 제거
     # 예: ▲, ▶, *, =, … 기호 제거
-    text = re.sub(r"[▲▶△*=…]", " ", text)
+    text = re.sub(r"[▲▶△■*=…]", " ", text)
 
     # 여러 개의 공백을 하나의 공백으로 정리
     # 앞뒤 공백은 strip()으로 제거
@@ -270,14 +301,14 @@ def clean_content(text):
 
 
 # content 컬럼의 원본 뉴스 본문을 전처리한 뒤 clean_content 컬럼에 저장
-df_20["clean_content"] = df_20["content"].apply(clean_content)
+df_400["clean_content"] = df_400["content"].apply(clean_content)
 
 # 전처리 전 content와 전처리 후 clean_content를 비교 확인
-df_20[["content", "clean_content"]].head()
+df_400[["content", "clean_content"]].head()
 
-df_20.head()
+df_400.head()
 
-df_20["clean_content"][79]
+df_400["clean_content"][150]
 
 
 
@@ -327,7 +358,7 @@ STOPWORDS = {
     # ============================================================
     # 특정 인물명이나 직책명이 반복 등장하여
     # 창업 트렌드 키워드 분석에 불필요한 영향을 주는 경우 제거
-    "윤석열", "모하메드",
+    "윤석열", "모하메드", "황현기", "호나우지뉴",
     "대통령", "장관", "기자", "대표", "위원장",
     "의원", "총리", "회장", "사장", "교수",
 
@@ -352,7 +383,7 @@ STOPWORDS = {
     # 7. 언론사 및 뉴스 출처 관련 단어
     # ============================================================
     # 기사 출처나 언론사명으로, 트렌드 분석 키워드와 직접 관련이 낮은 단어
-    "한국경제", "이투데이", "머니투데이",
+    "한국경제", "이투데이", "머니투데이", "News1",
     "뉴시스", "연합뉴스", "조선일보",
 
     # ============================================================
@@ -401,8 +432,9 @@ def remove_stopwords_and_extract_nouns(text):
 
         # NNG: 일반명사
         # NNP: 고유명사
-        # SL: 영어/외국어 표현, 예: AI, ICT, ESG
-        if pos in ["NNG", "NNP", "SL"]:
+        # VV: 동사
+        # VA: 형용사
+        if pos in ["NNG", "NNP", "VV", "VA"]:
 
             # 한 글자 단어 제거
             if len(word) <= 1:
@@ -418,10 +450,10 @@ def remove_stopwords_and_extract_nouns(text):
 
 
 # clean_content 컬럼을 기준으로 명사 추출 및 불용어 제거
-df_20["analysis_content"] = df_20["clean_content"].apply(remove_stopwords_and_extract_nouns)
+df_400["analysis_content"] = df_400["clean_content"].apply(remove_stopwords_and_extract_nouns)
 
 # 결과 확인
-df_20[["content", "clean_content", "analysis_content"]].head()
+df_400[["content", "clean_content", "analysis_content"]].head()
 
 
 
@@ -430,9 +462,10 @@ df_20[["content", "clean_content", "analysis_content"]].head()
 """
 
 !pip install keybert sentence-transformers -q
-from keybert import KeyBERT
-import pandas as pd
 
+from keybert import KeyBERT
+from sentence_transformers import SentenceTransformer
+import pandas as pd
 
 # ============================================================
 # KeyBERT 키워드 추출
@@ -449,9 +482,11 @@ import pandas as pd
 # ============================================================
 
 
+# 한국어 문장 임베딩 모델 로드
+embedding_model = SentenceTransformer("jhgan/ko-sroberta-multitask")
+
 # KeyBERT 모델 초기화
-# 한국어 뉴스 데이터에도 사용할 수 있는 다국어 문장 임베딩 모델 사용
-kw_model = KeyBERT(model="paraphrase-multilingual-MiniLM-L12-v2")
+kw_model = KeyBERT(model=embedding_model)
 
 
 def extract_keybert_keywords(text):
@@ -468,29 +503,30 @@ def extract_keybert_keywords(text):
     # KeyBERT 키워드 추출
     keywords = kw_model.extract_keywords(
         text,
-        keyphrase_ngram_range=(1, 1),  # 1단어 또는 2단어 조합 키워드 추출
+        keyphrase_ngram_range=(1, 1),  # 1단어 키워드 추출
         stop_words=None,               # 불용어는 이미 analysis_content에서 제거했으므로 None
-        top_n=10                       # 기사 1개당 상위 10개 키워드 추출
+        top_n=20,                      # 기사 1개당 상위 20개 키워드 추출
+        use_mmr=True,                  # 비슷한 키워드 반복 감소
+        diversity=0.5                  # 키워드 다양성 조절
     )
 
     return keywords
 
 
 # analysis_content 컬럼을 기준으로 KeyBERT 키워드 추출
-df_20["keybert_keyword_scores"] = df_20["analysis_content"].apply(extract_keybert_keywords)
+df_400["keybert_keyword_scores"] = df_400["analysis_content"].apply(extract_keybert_keywords)
 
 # 키워드만 따로 리스트 형태로 저장
-df_20["keybert_keywords"] = df_20["keybert_keyword_scores"].apply(
+df_400["keybert_keywords"] = df_400["keybert_keyword_scores"].apply(
     lambda keywords: [keyword for keyword, score in keywords]
 )
 
 # 결과 확인
-df_20[["content", "clean_content", "analysis_content", "keybert_keywords", "keybert_keyword_scores"]].head()
+df_400[["content", "clean_content", "analysis_content", "keybert_keywords", "keybert_keyword_scores"]].head()
 
-df_20
+df_400["keybert_keywords"][120]
 
-# df_20의 0번째 행에 있는 keybert_keyword_scores 컬럼 값 확인
-df_20.loc[626, "keybert_keyword_scores"]
+df_400["url"].iloc[120]
 
 
 
@@ -498,18 +534,23 @@ df_20.loc[626, "keybert_keyword_scores"]
 - clean_content 컬럼 사용
 """
 
-!pip install bertopic
+!pip install bertopic -q
+
 from bertopic import BERTopic
 from sklearn.feature_extraction.text import CountVectorizer
 from sentence_transformers import SentenceTransformer
 from umap import UMAP
 from hdbscan import HDBSCAN
 import pandas as pd
+import torch
 
 
 # ============================================================
 # BERTopic 토픽 모델링
 # ============================================================
+# 사용 데이터프레임:
+# - df_400
+#
 # 사용 컬럼:
 # - clean_content
 #   → 노이즈 제거는 완료되었지만 문장 형태가 유지된 뉴스 본문
@@ -517,9 +558,6 @@ import pandas as pd
 # 목적:
 # - 뉴스 본문을 의미적으로 비슷한 토픽끼리 묶는다.
 # - 토픽별 대표 키워드를 추출한다.
-#
-# 주의:
-# - df_20은 20개 샘플 데이터이므로 실제 전체 데이터보다 토픽 품질은 낮을 수 있음
 # ============================================================
 
 
@@ -538,8 +576,11 @@ def kiwi_tokenizer(text):
         word = token.form
         pos = token.tag
 
-        # NNG: 일반명사만 사용
-        if pos == "NNG":
+        # NNG: 일반명사
+        # NNP: 고유명사
+        # VV : 동사
+        # VA : 형용사
+        if pos in ["NNG", "NNP", "VV", "VA"]:
 
             # 한 글자 단어 제거
             if len(word) <= 1:
@@ -557,10 +598,10 @@ def kiwi_tokenizer(text):
 # ============================================================
 # 2. BERTopic 입력 데이터 준비
 # ============================================================
-# clean_content 컬럼에서 비어 있지 않은 문장만 사용
+# df_400의 clean_content 컬럼에서 비어 있지 않은 문장만 사용
 # ============================================================
 
-df_bertopic = df_20[df_20["clean_content"].notna()].copy()
+df_bertopic = df_400[df_400["clean_content"].notna()].copy()
 df_bertopic = df_bertopic[df_bertopic["clean_content"].str.strip() != ""].copy()
 
 docs = df_bertopic["clean_content"].tolist()
@@ -586,30 +627,38 @@ vectorizer_model = CountVectorizer(
 # ============================================================
 # 4. 임베딩 모델 설정
 # ============================================================
-# 한국어 문장 의미를 벡터로 변환하기 위한 다국어 임베딩 모델 사용
+# 한국어 문장 임베딩 모델 사용
+# - snunlp/KR-SBERT-V40K-klueNLI-augSTS
 # ============================================================
 
-embedding_model = SentenceTransformer("paraphrase-multilingual-MiniLM-L12-v2")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
+embedding_model = SentenceTransformer(
+    "snunlp/KR-SBERT-V40K-klueNLI-augSTS",
+    device=device
+)
+
+print("사용 device:", device)
 
 
 # ============================================================
 # 5. UMAP / HDBSCAN 설정
 # ============================================================
-# df_20은 샘플 데이터 20개만 사용하므로,
-# 작은 데이터에서도 토픽이 생성될 수 있도록 값을 낮게 설정
+# df_400은 400개 샘플 데이터이므로,
+# 기존 df_20보다 조금 더 안정적인 클러스터링 설정을 사용한다.
 # ============================================================
 
 umap_model = UMAP(
-    n_neighbors=5,
-    n_components=2,
+    n_neighbors=15,
+    n_components=5,
     min_dist=0.0,
     metric="cosine",
     random_state=42
 )
 
 hdbscan_model = HDBSCAN(
-    min_cluster_size=2,
-    min_samples=1,
+    min_cluster_size=10,
+    min_samples=3,
     metric="euclidean",
     prediction_data=True
 )
@@ -633,18 +682,18 @@ topics, probs = topic_model.fit_transform(docs)
 
 
 # ============================================================
-# 7. df_20에 BERTopic 결과 저장
+# 7. df_400에 BERTopic 결과 저장
 # ============================================================
-# topic 번호를 원본 df_20의 해당 행에 다시 저장
+# topic 번호를 원본 df_400의 해당 행에 다시 저장
 # ============================================================
 
 df_bertopic["bertopic_topic"] = topics
 
-# df_20에 bertopic_topic 컬럼 생성
-df_20["bertopic_topic"] = None
+# df_400에 bertopic_topic 컬럼 생성
+df_400["bertopic_topic"] = None
 
 # clean_content가 존재했던 행에만 topic 결과 저장
-df_20.loc[df_bertopic.index, "bertopic_topic"] = df_bertopic["bertopic_topic"]
+df_400.loc[df_bertopic.index, "bertopic_topic"] = df_bertopic["bertopic_topic"]
 
 
 # ============================================================
@@ -656,10 +705,10 @@ topic_info = topic_model.get_topic_info()
 print("생성된 토픽 정보:")
 display(topic_info)
 
-# df_20 결과 확인
-df_20[["clean_content", "bertopic_topic"]].head()
+# df_400 결과 확인
+df_400[["clean_content", "bertopic_topic"]].head()
 
-df_20[
+df_400[
     [
         "clean_content",
         "analysis_content",
